@@ -1,5 +1,4 @@
-﻿zlib1g-dev
+libz-dev
 libjpeg-dev
 libpng-dev
 libtiff-dev
-libfreetype6-dev
