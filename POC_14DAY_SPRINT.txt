@@ -1,0 +1,379 @@
+===============================================================================
+                    NOTICEFLOW PoC 14-DAY SPRINT
+                   Hypothesis Validation Experiment
+===============================================================================
+
+CORE HYPOTHESIS TO TEST:
+"Will a CA trust and reuse AI output on a real tax notice?"
+
+SUCCESS GATE (END OF DAY 14):
+✓ 2/3+ CAs say: "I would use this again"
+
+===============================================================================
+                            WEEKLY BREAKDOWN
+===============================================================================
+
+WEEK 1 (Days 1-7): BUILD & VALIDATE PIPELINE
+────────────────────────────────────────────
+
+Day 1: Setup & Data Collection
+  □ Email 5 CAs: "Can you send 2-3 anonymized tax notices?"
+  □ Create /test_notices folder
+  □ Create test_cases.csv with columns:
+      - file_name
+      - section
+      - actual_deadline
+      - key_allegation
+      - expected_documents
+  Status: [ ] Not Started  [ ] In Progress  [ ] Done
+
+Day 2: Continue Collection
+  □ Collect minimum 8-10 real notices
+  □ Complete test_cases.csv for all notices
+  □ Review existing process_notice.py code
+  □ Prepare core prompt for refinement
+  Status: [ ] Not Started  [ ] In Progress  [ ] Done
+
+Day 3: Test Full Pipeline
+  □ Run process_notice.py on all 10 notices
+  □ Verify: 100% produce valid JSON (all or nothing)
+  □ Create failure_log.csv for any errors
+  □ Log: type of failure, root cause, fix applied
+  Success Metric: All 10 notices → valid JSON
+  Status: [ ] Not Started  [ ] In Progress  [ ] Done
+
+Day 4-5: Refine & Debug
+  □ If failures from Day 3: iterate prompt
+  □ Measure deadline accuracy: __% (target ≥90%)
+  □ Measure section accuracy: __% (target ≥80%)
+  □ Run full pipeline again
+  □ Document all changes
+  Success Metric: 90%+ deadline, 80%+ section
+  Status: [ ] Not Started  [ ] In Progress  [ ] Done
+
+Day 6-7: Stabilize
+  □ Final prompt refinement
+  □ Zero crashes on edge cases
+  □ Document final prompt in CORE_PROMPT.txt
+  □ Prepare for UI work
+  Status: [ ] Not Started  [ ] In Progress  [ ] Done
+
+WEEK 1 SUCCESS GATE:
+  ✓ 100% valid JSON output on all test notices
+  ✓ Deadline accuracy ≥90%
+  ✓ Section accuracy ≥80%
+  
+  If NOT met: Extended debug (Days 6-7) before moving to Week 2
+
+===============================================================================
+
+WEEK 2 (Days 8-14): BUILD UI & LIVE USER TESTING
+────────────────────────────────────────────────
+
+Day 8-10: Build & Test Streamlit UI
+  □ Create simple upload interface
+  □ Connect to process_notice.py
+  □ Add processing indicator (spinners)
+  □ Display results (formatted JSON + plain text)
+  □ Add feedback buttons: "Helpful" / "Not Helpful"
+  □ Test end-to-end locally (5+ runs)
+  □ Deploy to Streamlit Cloud (optional)
+  Success Metric: Zero crashes, <30 sec response time
+  Status: [ ] Not Started  [ ] In Progress  [ ] Done
+
+Day 11: Recruit & Schedule Testers
+  □ Email 3-5 CAs: "30-min testing session this week"
+  □ Confirm minimum 3 sessions
+  □ Prepare observation form (template below)
+  □ Schedule: Day 12-14
+  Status: [ ] Not Started  [ ] In Progress  [ ] Done
+
+Day 12-13: User Testing Sessions 1-3
+  For each CA:
+    □ Have them upload THEIR actual notice (not yours)
+    □ Watch silently (do NOT explain or help)
+    □ After results displayed, ask:
+        - "Is this accurate?" (Y/N/Partially)
+        - "Does this save you time?" (Y/N)
+        - "Would you use this on your next notice?" (Y/N)
+        - "What's wrong or confusing?"
+    □ Log exact response + reaction
+    □ Note: quiet nod = trust, confused look = problem
+    □ Screen record (if they allow)
+  Status: Session 1 [ ] Done  Session 2 [ ] Done  Session 3 [ ] Done
+
+Day 14: Final Sessions + Analysis
+  □ Sessions 4-5 (if available)
+  □ Compile all feedback
+  □ Calculate metrics:
+      - % who would re-use: ___/5 = ___%
+      - Deadline accuracy (from live tests): ____%
+      - Section accuracy (from live tests): ____%
+      - Response time average: ___ seconds
+      - Top 3 complaints:
+        1. _______________
+        2. _______________
+        3. _______________
+  □ Make GO/NO-GO decision
+  □ Create POC_RESULTS.md
+  Status: [ ] Not Started  [ ] In Progress  [ ] Done
+
+WEEK 2 SUCCESS GATE (Day 14 DECISION):
+  ✓ 2/3+ CAs: "I would use this on my next notice"
+  ✓ Deadline accuracy from live tests: ≥90%
+  ✓ Average response time: <30 seconds
+  
+  IF ALL MET:
+    ✓ GO → Start Phase 2 (Add FastAPI + PostgreSQL)
+    
+  IF NOT MET:
+    □ "Deadline wrong" → Fix prompt, retest 2 users (Days 15-17)
+    □ "Checklist generic" → Add rules, retest 2 users
+    □ "Takes too long" → Optimize OCR, retest
+    □ Multiple issues → Product doesn't solve problem
+       → Consider pivoting or killing
+    □ UNCLEAR → Extend to Day 21 decision
+
+===============================================================================
+                         DAILY EXECUTION TEMPLATE
+===============================================================================
+
+Every morning, fill in:
+
+DATE: ________
+
+TODAY'S GOAL:
+  - __________________________________
+  - __________________________________
+
+WORK COMPLETED:
+  ✓ __________________________________
+  ✓ __________________________________
+  ✓ __________________________________
+
+BLOCKERS / ISSUES:
+  ⚠ __________________________________
+     ACTION: ___________________
+
+METRICS TODAY:
+  • JSON validity: ___% (target 100%)
+  • Avg response time: ___ sec
+  • Errors encountered: ___
+
+TOMORROW'S PRIORITY:
+  - __________________________________
+
+===============================================================================
+                       FAILURE LOGGING TEMPLATE
+===============================================================================
+
+Every time something fails, log it:
+
+┌─────────────────────────────────────────────────────────────────┐
+│ FAILURE LOG                                                     │
+├─────────────────────────────────────────────────────────────────┤
+│ Notice ID:        _______________                              │
+│ Issue:            _______________                              │
+│ Type:             □ Deadline  □ Section  □ Checklist  □ Other │
+│ Severity:         □ Critical  □ Major    □ Minor               │
+│ Root Cause:       _______________                              │
+│ Fix Applied:      _______________                              │
+│ Fixed Y/N:        □ Yes  □ No                                  │
+│ Date Fixed:       _______________                              │
+└─────────────────────────────────────────────────────────────────┘
+
+COMPILED INTO: failure_log.csv
+USE FOR: Phase 2 training data + knowledge base
+
+===============================================================================
+                      CA TESTING OBSERVATION FORM
+===============================================================================
+
+SESSION #: ___
+
+CA NAME/FIRM: ___________________________
+
+NOTICE DETAILS:
+  • Section: _____
+  • Format: □ PDF  □ Image
+  • Quality: □ Digital  □ Scanned  □ WhatsApp
+  • Tax year: _____
+
+OBSERVATION NOTES (Watch silently):
+  • Time to upload: ___ seconds
+  • System processing time: ___ seconds
+  • First reaction: □ Nod  □ Confusion  □ Doubt  □ Interest
+  • How long they read results: ___ seconds
+
+POST-TESTING QUESTIONS:
+
+  Q: "Is this accurate?"
+  A: □ Yes  □ Partially  □ No
+  Notes: ________________________________
+
+  Q: "Does this save you time?"
+  A: □ Yes  □ Somewhat  □ No
+  Notes: ________________________________
+
+  Q: "Would you use this on your next notice?"
+  A: □ Yes  □ Maybe  □ No
+  Notes: ________________________________
+
+  Q: "What's wrong or confusing?"
+  A: ________________________________
+     ________________________________
+
+OVERALL ASSESSMENT:
+  Trust Level:     □ High  □ Medium  □ Low
+  Would Recommend: □ Yes  □ Maybe  □ No
+
+SCREENSHOT/RECORDING: Yes / No / N/A
+
+===============================================================================
+                         END-OF-DAY 14 SUMMARY
+===============================================================================
+
+METRICS TO REPORT:
+
+  1. Deadline Accuracy (live tests):     ___% (Target: ≥90%)
+  2. Section Accuracy (live tests):      ___% (Target: ≥80%)
+  3. Would Re-use Rate:                  __/5 = ___% (Target: ≥66%)
+  4. Average Response Time:              ___ sec (Target: <30 sec)
+  5. Top User Complaints:
+     #1: ________________________________
+     #2: ________________________________
+     #3: ________________________________
+
+DECISION:
+
+  [ ] GO → Metrics met, proceed to Phase 2
+  
+  [ ] ITERATE → One issue found, can fix quickly
+              → Retest Days 15-17
+              → Decision by Day 21
+  
+  [ ] NO-GO → Multiple critical issues
+             → Product doesn't solve problem
+             → Consider pivoting or killing
+
+NEXT PHASE (if GO):
+  • Start: Phase 2 (FastAPI + PostgreSQL)
+  • Timeline: Weeks 3-5
+  • Goal: Add case history & persistence
+
+===============================================================================
+                         RESOURCES & REFERENCES
+===============================================================================
+
+DOCUMENTS CREATED IN THIS SESSION:
+
+1. POC_DESIGN_EXECUTION.md (this sprint's details)
+2. POC_14DAY_SPRINT.txt (daily checklist - you are here)
+3. EXECUTION_ROADMAP_TEAM.md (12-week full roadmap)
+4. TECH_STACK_ROADMAP.md (technology decisions)
+5. DATA_STRATEGY_KNOWLEDGE_BASE.md (knowledge base design)
+6. AGENTIC_ARCHITECTURE_DESIGN.md (production system design)
+
+KEY FILES TO CREATE:
+
+- /test_notices/ (folder for 10 real notices)
+- test_cases.csv (ground truth data)
+- failure_log.csv (error tracking)
+- CORE_PROMPT.txt (production prompt)
+- testing_observations.md (CA feedback)
+- POC_RESULTS.md (final decision)
+
+===============================================================================
+                        WHAT SUCCESS LOOKS LIKE
+===============================================================================
+
+CA uses your tool and says:
+
+  "Hmm, this is mostly right. I'd still verify, but it saves me reading
+   through the whole notice manually. Yeah, I'd use this on my next notice."
+
+NOT:
+  "Wow, this is amazing AI!" (too much hype)
+  "This is completely wrong" (core idea broken)
+
+YOU WANT: Quiet utility, not excitement.
+
+===============================================================================
+                        WHAT FAILURE LOOKS LIKE
+===============================================================================
+
+CA uses your tool and says:
+
+  "The deadline is wrong."
+  "This checklist is too generic."
+  "I don't trust this at all."
+  "Why would I use this?"
+
+→ Do NOT add features
+→ Fix the core issue or kill the project
+
+===============================================================================
+                         EMERGENCY PROTOCOL
+===============================================================================
+
+IF process_notice.py crashes on a notice:
+  □ Capture the error message
+  □ Log in failure_log.csv
+  □ Test with simpler notice (digital PDF)
+  □ If still broken: debug OCR pipeline
+  □ If LLM error: check API key + quota
+  □ If prompt error: simplify prompt
+
+IF CA testing feedback is very negative:
+  □ Do NOT panic
+  □ Ask: "What specifically is wrong?"
+  □ Is it fixable with prompt iteration? (3-5 days)
+  □ Is it a core concept problem? (kill or pivot)
+
+IF response time is >30 seconds:
+  □ Profile where time is spent:
+    - OCR? → Switch to GPT-4o mini or simpler model
+    - LLM? → Try model caching or prompt compression
+    - Network? → Not much you can do in PoC
+
+IF accuracy is <80%:
+  □ Don't blame the model
+  □ Blame the prompt
+  □ Add more examples + clearer instructions
+  □ Retest
+
+===============================================================================
+                      FINAL REMINDER: DO NOT DEVIATE
+===============================================================================
+
+DO:
+  ✓ Focus on ONE hypothesis
+  ✓ Test with real data only
+  ✓ Iterate fast (1-2 day cycles)
+  ✓ Measure everything
+  ✓ Kill features that don't help
+  ✓ Get real CA feedback early
+
+DON'T:
+  ✗ Build authentication (you don't need it)
+  ✗ Build database (save it for Phase 2)
+  ✗ Add fancy UI (simple is better)
+  ✗ Test with dummy data (use real notices)
+  ✗ Spend 2 weeks perfecting (ship by Day 10)
+  ✗ Avoid showing failures (log them, learn from them)
+
+===============================================================================
+
+THIS IS YOUR EXECUTION COMMITMENT.
+
+Print this. Put it on your wall. Check off every day.
+
+This PoC will tell you if NoticeFlow is real.
+
+Everything before was preparation.
+
+This is the moment.
+
+Let's go.
+
+===============================================================================

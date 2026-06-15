@@ -1,0 +1,230 @@
+# NoticeFlow Deployment Checklist (Copy & Paste)
+
+## 🚀 FASTEST PATH TO LIVE (12 minutes)
+
+### Phase 1: Local Git Setup (5 minutes)
+
+**Run this in PowerShell:**
+
+```powershell
+cd c:\Users\ok\Downloads\NoticeFlow
+.\deploy.ps1
+```
+
+Or manually:
+
+```powershell
+git init
+git config user.name "NoticeFlow Developer"
+git config user.email "developer@noticeflow.local"
+git add .
+git commit -m "NoticeFlow MVP"
+```
+
+✓ **Check:** `git log --oneline` shows your commit
+
+---
+
+### Phase 2: Create GitHub Repo (3 minutes)
+
+**In browser:**
+
+1. Go to: https://github.com/new
+2. Repository name: **`noticeflow`** (lowercase)
+3. Description: "Tax notice triage tool"
+4. Visibility: **PUBLIC** (required for Streamlit)
+5. ✓ DO NOT initialize with README
+6. Click "Create repository"
+7. Copy the **SSH URL** (shown after creation)
+   - Format: `git@github.com:YOUR_USERNAME/noticeflow.git`
+
+---
+
+### Phase 3: Push Code to GitHub (2 minutes)
+
+**Run this in PowerShell:**
+
+```powershell
+git remote add origin git@github.com:YOUR_USERNAME/noticeflow.git
+git branch -M main
+git push -u origin main
+```
+
+Replace `YOUR_USERNAME` with your actual GitHub username.
+
+✓ **Check:** Go to https://github.com/YOUR_USERNAME/noticeflow → files visible
+
+---
+
+### Phase 4: Deploy to Streamlit Cloud (5 minutes)
+
+**In browser:**
+
+1. Go to: https://share.streamlit.io
+2. Click "Sign up with GitHub"
+3. Authorize Streamlit (confirm)
+4. Click "New app"
+5. Fill in:
+   - **GitHub account:** YOUR_USERNAME
+   - **Repository:** noticeflow
+   - **Branch:** main
+   - **File path:** app.py
+6. Click "Deploy"
+7. **Wait 2-3 minutes** for build to complete
+   - Watch the logs
+   - You'll see: "App available at: https://YOUR_USERNAME-noticeflow.streamlit.app"
+
+✓ **Check:** App is live (page loads without error)
+
+---
+
+### Phase 5: Add API Secrets (2 minutes)
+
+**Get keys first:**
+
+1. OpenAI: https://platform.openai.com/api/keys → Create key → Copy
+2. Azure (optional): https://portal.azure.com → Document Intelligence → Copy Endpoint + Key
+
+**Add to Streamlit:**
+
+1. Go to: https://share.streamlit.io (your workspace)
+2. Find "noticeflow" app
+3. Click three dots (•••) → "Settings"
+4. Click "Secrets"
+5. Paste (replace with your actual keys):
+
+```toml
+OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxx"
+AZURE_DOCUMENT_INTELLIGENCE_KEY = "xxxxxxxxxxxxxxxxxxxx"
+AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT = "https://eastus.api.cognitive.microsoft.com/"
+```
+
+6. Click "Save"
+7. Wait 30 seconds
+8. Refresh app: https://YOUR_USERNAME-noticeflow.streamlit.app
+
+✓ **Check:** Upload a test PDF → processes successfully
+
+---
+
+### Phase 6: Validate Locally (5 minutes)
+
+**Test these:**
+
+- [ ] Upload text PDF → processes <30 seconds
+- [ ] Upload scanned image → processes <30 seconds
+- [ ] Results show deadline + section + explanation
+- [ ] Color coding: red (<7d) | yellow (7-14d) | green (>14d)
+- [ ] Document checklist is relevant
+- [ ] Mobile view is readable
+
+✓ **Result:** App works end-to-end
+
+---
+
+### Phase 7: Invite Beta Users (When ready)
+
+**Share:**
+
+```
+Live link: https://YOUR_USERNAME-noticeflow.streamlit.app
+```
+
+**Send template:**
+
+```
+Subject: Free tax notice triage tool — testing needed
+
+Hi,
+
+I built a tool to convert tax notices into structured data 
+in 20 seconds (deadline, documents needed, plain explanation).
+
+No signup required. Try it on 3-5 real notices?
+
+Link: https://YOUR_USERNAME-noticeflow.streamlit.app
+
+Your feedback shapes what we build next.
+
+Thanks,
+[Your Name]
+```
+
+---
+
+## ⚠️ COMMON GOTCHAS
+
+### ❌ GitHub repo is PRIVATE
+→ Change to PUBLIC (Streamlit Cloud requires it)
+→ Go to repo settings → Change visibility
+
+### ❌ Secrets not loading
+→ Check format: `KEY = "value"` (with space around =)
+→ Wait 30 seconds after saving
+→ Refresh browser
+
+### ❌ ".streamlit/secrets.toml" visible in GitHub
+→ SECURITY ISSUE — rotate all API keys immediately
+→ Go to .gitignore, add: `.streamlit/secrets.toml`
+→ Run: `git rm --cached .streamlit/secrets.toml`
+→ Commit: `git commit -m "Remove secrets from history"`
+
+### ❌ "ModuleNotFoundError" on Streamlit
+→ Missing package in requirements.txt
+→ Run locally: `pip install [package]`
+→ Update: `pip freeze > requirements.txt`
+→ Git push (auto-redeploy)
+
+### ❌ "API key invalid"
+→ Check key is correct in Streamlit Secrets
+→ Wait 1 minute and refresh
+→ Check token hasn't expired
+
+---
+
+## 📊 SUCCESS METRICS (Week 1-4)
+
+Track these for beta users:
+
+| Metric | Target | Notes |
+|--------|--------|-------|
+| Deadline accuracy | ≥80% | "Did deadline match notice?" |
+| Would re-use | ≥2/3 yes | "Would use on next notice?" |
+| Saved time | ≥5 min | Average reported |
+| Checklist useful | ≥70% | "Did it save doc collection time?" |
+
+---
+
+## 📝 QUICK REFERENCE
+
+| Item | Value |
+|------|-------|
+| Live app URL | https://YOUR_USERNAME-noticeflow.streamlit.app |
+| GitHub repo | https://github.com/YOUR_USERNAME/noticeflow |
+| Streamlit dashboard | https://share.streamlit.io |
+| OpenAI keys | https://platform.openai.com/api/keys |
+| Azure portal | https://portal.azure.com |
+| GitHub new repo | https://github.com/new |
+
+---
+
+## 🎯 DONE WHEN
+
+✅ Git repo created locally  
+✅ Code committed  
+✅ GitHub repo created (public)  
+✅ Code pushed to GitHub  
+✅ Streamlit app deployed  
+✅ App is live (URL works)  
+✅ Secrets added  
+✅ API calls work (tested with PDF upload)  
+✅ 3-5 beta CAs invited  
+✅ Feedback collected (Week 1-4)  
+
+**Then:** Go/no-go decision for Phase 2
+
+---
+
+**Total time: ~12 minutes from terminal to live app**
+
+Ready? Start with `.\deploy.ps1` 🚀
