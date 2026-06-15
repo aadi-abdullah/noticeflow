@@ -1,11 +1,11 @@
 """
-NoticeFlow Lite – Notice Processing Engine
-Core logic for OCR extraction and GPT-4o structured parsing of tax notices.
+NoticeFlow Lite – Notice Processing Engine (Groq Edition)
+Core logic for OCR extraction and Groq structured parsing of tax notices.
 
 This module handles:
-1. File type detection and OCR (Azure Document Intelligence or GPT-4o Vision)
+1. File type detection and OCR (Azure Document Intelligence or Groq Vision)
 2. Raw text extraction from PDFs and images
-3. Structured JSON extraction using GPT-4o with custom system prompt
+3. Structured JSON extraction using Groq (llama-3.3-70b-versatile) with custom system prompt
 4. Error handling and fallback mechanisms
 
 Usage:
@@ -21,7 +21,7 @@ from typing import Dict, Any, Optional, List
 import base64
 
 # External dependencies
-from openai import OpenAI, APIError
+from groq import Groq, APIError
 from PIL import Image
 import PyPDF2
 
@@ -37,15 +37,28 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize OpenAI client
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key=OPENAI_API_KEY)
+# ---------------------------------------------------------------------------
+# Groq client initialisation
+# ---------------------------------------------------------------------------
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY or GROQ_API_KEY == "your_groq_api_key_here":
+    logger.warning(
+        "GROQ_API_KEY is not set. Notice parsing will not work. "
+        "Add it to .streamlit/secrets.toml or your environment."
+    )
+client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+
+# Groq model names
+GROQ_TEXT_MODEL = "llama-3.3-70b-versatile"
+GROQ_VISION_MODEL = "llama-3.2-90b-vision-preview"
 
 # Azure Document Intelligence credentials (optional)
 AZURE_ENDPOINT = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT")
 AZURE_KEY = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY")
 
-# System prompt for GPT-4o to extract and parse FBR notices
+# ---------------------------------------------------------------------------
+# System prompt for Groq to extract and parse FBR notices
+# ---------------------------------------------------------------------------
 FBR_SYSTEM_PROMPT = """You are an expert system for parsing Pakistani FBR (Federal Board of Revenue) and IRIS tax notices.
 
 Your task is to extract and structure information from tax notices with high accuracy and confidence tracking.
@@ -94,41 +107,43 @@ Return output as valid JSON with this exact structure:
 Never fabricate data. If a field cannot be extracted, mark it as uncertain."""
 
 
+# =========================================================================
+# TEXT EXTRACTION HELPERS
+# =========================================================================
+
 def extract_text_from_pdf_with_azure(pdf_bytes: bytes) -> Optional[str]:
     """
     Extract text from PDF using Azure Document Intelligence.
     Preferred method for scanned PDFs and mixed-format documents.
-    
+
     Args:
         pdf_bytes (bytes): PDF file content.
-    
+
     Returns:
         Optional[str]: Extracted text, or None if extraction fails.
     """
     if not AZURE_AVAILABLE or not AZURE_ENDPOINT or not AZURE_KEY:
         logger.warning("Azure Document Intelligence not configured. Skipping.")
         return None
-    
+
     try:
         logger.info("Attempting OCR with Azure Document Intelligence...")
         client_azure = DocumentIntelligenceClient(
             endpoint=AZURE_ENDPOINT,
-            credential=AzureKeyCredential(AZURE_KEY)
+            credential=AzureKeyCredential(AZURE_KEY),
         )
-        
-        # Analyze document
+
         poller = client_azure.begin_analyze_document(
             "prebuilt-document",
             pdf_bytes,
-            content_type="application/pdf"
+            content_type="application/pdf",
         )
         result = poller.result()
-        
-        # Extract text from all pages
+
         extracted_text = result.content
         logger.info(f"Azure OCR successful. Extracted {len(extracted_text)} characters.")
         return extracted_text
-    
+
     except Exception as e:
         logger.warning(f"Azure OCR failed: {str(e)}")
         return None
@@ -138,10 +153,10 @@ def extract_text_from_pdf_with_pypdf2(pdf_bytes: bytes) -> Optional[str]:
     """
     Extract text from text-based PDFs using PyPDF2.
     Fallback for simple PDFs (not scanned).
-    
+
     Args:
         pdf_bytes (bytes): PDF file content.
-    
+
     Returns:
         Optional[str]: Extracted text, or None if extraction fails or PDF is scanned.
     """
@@ -150,220 +165,289 @@ def extract_text_from_pdf_with_pypdf2(pdf_bytes: bytes) -> Optional[str]:
         pdf_file = io.BytesIO(pdf_bytes)
         reader = PyPDF2.PdfReader(pdf_file)
         text = ""
-        
+
         # Extract from first 5 pages (limit for performance)
         for page_num in range(min(5, len(reader.pages))):
             page = reader.pages[page_num]
             text += page.extract_text()
-        
+
         if text.strip():
             logger.info(f"PyPDF2 extraction successful. Extracted {len(text)} characters.")
             return text
         else:
             logger.info("PyPDF2 extraction returned empty text. Likely a scanned PDF.")
             return None
-    
+
     except Exception as e:
         logger.warning(f"PyPDF2 extraction failed: {str(e)}")
         return None
 
 
-def encode_image_to_base64(image_bytes: bytes, file_type: str) -> str:
+def encode_image_to_base64(image_bytes: bytes) -> str:
     """
-    Encode image bytes to base64 string for GPT-4o Vision API.
-    
+    Encode image bytes to base64 string for Groq Vision API.
+
     Args:
         image_bytes (bytes): Image file content.
-        file_type (str): Image MIME type (e.g., "image/png", "image/jpeg").
-    
+
     Returns:
         str: Base64 encoded image.
     """
     return base64.b64encode(image_bytes).decode("utf-8")
 
 
-def extract_text_with_gpt4_vision(file_bytes: bytes, file_type: str, file_name: str) -> Optional[str]:
+def pdf_first_page_to_image(pdf_bytes: bytes) -> Optional[bytes]:
     """
-    Extract text from image or PDF using GPT-4o Vision API.
-    Fallback method for scanned PDFs and images.
-    
+    Convert the first page of a PDF to a PNG image byte buffer.
+    Used so that Groq Vision can "see" scanned PDFs.
+
+    Args:
+        pdf_bytes (bytes): PDF file content.
+
+    Returns:
+        Optional[bytes]: PNG image bytes of the first page, or None on failure.
+    """
+    try:
+        from pdf2image import convert_from_bytes  # optional dependency
+        images = convert_from_bytes(pdf_bytes, first_page=1, last_page=1, dpi=200)
+        if images:
+            buf = io.BytesIO()
+            images[0].save(buf, format="PNG")
+            buf.seek(0)
+            return buf.read()
+    except ImportError:
+        logger.warning(
+            "pdf2image not installed. Cannot convert PDF page to image for Groq Vision. "
+            "Install with: pip install pdf2image  (also requires poppler on your system)"
+        )
+    except Exception as e:
+        logger.warning(f"PDF-to-image conversion failed: {str(e)}")
+    return None
+
+
+def extract_text_with_groq_vision(
+    file_bytes: bytes, file_type: str, file_name: str
+) -> Optional[str]:
+    """
+    Extract text from an image using Groq Vision (llama-3.2-90b-vision-preview).
+    Fallback method for scanned PDFs and images when Azure is unavailable.
+
     Args:
         file_bytes (bytes): File content.
-        file_type (str): MIME type (e.g., "image/png", "application/pdf").
+        file_type (str): MIME type (e.g., "image/png", "image/jpeg").
         file_name (str): Original file name.
-    
+
     Returns:
         Optional[str]: Extracted text, or None if extraction fails.
     """
+    if not client:
+        logger.error("Groq client not initialised. Cannot use Vision API.")
+        return None
+
     try:
-        logger.info(f"Attempting OCR with GPT-4o Vision for {file_name}...")
-        
-        # For PDFs, limit to first page to avoid token overuse
+        logger.info(f"Attempting OCR with Groq Vision for {file_name}...")
+
+        # If the file is a PDF we need to convert it to an image first
         if file_type == "application/pdf":
-            # Use PyPDF2 to extract first page as image-like data
-            # For simplicity, we'll send the whole PDF reference
-            # In production, convert first page to image and encode
-            logger.warning("PDF sent to Vision API. This may consume more tokens.")
-        
-        # Encode to base64
-        base64_image = encode_image_to_base64(file_bytes, file_type)
-        
-        # Call GPT-4o Vision
-        message = client.messages.create(
-            model="gpt-4o",
+            image_bytes = pdf_first_page_to_image(file_bytes)
+            if image_bytes is None:
+                logger.warning(
+                    "Could not convert PDF to image for Groq Vision. "
+                    "Skipping vision extraction for this PDF."
+                )
+                return None
+            file_type = "image/png"
+            file_bytes = image_bytes
+
+        base64_image = encode_image_to_base64(file_bytes)
+
+        response = client.chat.completions.create(
+            model=GROQ_VISION_MODEL,
             max_tokens=2000,
             messages=[
                 {
                     "role": "user",
                     "content": [
                         {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": file_type,
-                                "data": base64_image
-                            }
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{file_type};base64,{base64_image}"
+                            },
                         },
                         {
                             "type": "text",
-                            "text": "Extract all text from this tax notice. Preserve structure and formatting. Return only the extracted text."
-                        }
-                    ]
+                            "text": (
+                                "Extract all text from this tax notice. "
+                                "Preserve structure and formatting. "
+                                "Return only the extracted text."
+                            ),
+                        },
+                    ],
                 }
-            ]
+            ],
         )
-        
-        extracted_text = message.content[0].text
-        logger.info(f"GPT-4o Vision extraction successful. Extracted {len(extracted_text)} characters.")
+
+        extracted_text = response.choices[0].message.content
+        logger.info(
+            f"Groq Vision extraction successful. Extracted {len(extracted_text)} characters."
+        )
         return extracted_text
-    
+
     except APIError as e:
-        logger.warning(f"GPT-4o Vision API error: {str(e)}")
+        logger.warning(f"Groq Vision API error: {str(e)}")
         return None
     except Exception as e:
-        logger.warning(f"GPT-4o Vision extraction failed: {str(e)}")
+        logger.warning(f"Groq Vision extraction failed: {str(e)}")
         return None
 
 
 def extract_raw_text(uploaded_file) -> Optional[str]:
     """
     Extract raw text from uploaded file (PDF or image).
-    Uses multiple fallback strategies: Azure -> PyPDF2 -> GPT-4o Vision.
-    
+    Uses multiple fallback strategies: Azure → PyPDF2 → Groq Vision.
+
     Args:
         uploaded_file: Streamlit UploadedFile object.
-    
+
     Returns:
         Optional[str]: Raw extracted text, or None if all methods fail.
     """
     file_bytes = uploaded_file.read()
     file_name = uploaded_file.name
     file_type = uploaded_file.type
-    
-    logger.info(f"Starting text extraction for {file_name} ({file_type}, {len(file_bytes)} bytes)")
-    
-    # Determine extraction strategy based on file type
+
+    logger.info(
+        f"Starting text extraction for {file_name} ({file_type}, {len(file_bytes)} bytes)"
+    )
+
+    # ------- PDF -------
     if file_type == "application/pdf":
         # Try Azure first (best for scanned PDFs)
         if AZURE_AVAILABLE and AZURE_ENDPOINT and AZURE_KEY:
             text = extract_text_from_pdf_with_azure(file_bytes)
             if text and text.strip():
                 return text
-        
+
         # Try PyPDF2 for text-based PDFs
         text = extract_text_from_pdf_with_pypdf2(file_bytes)
         if text and text.strip():
             return text
-        
-        # Fall back to GPT-4o Vision
-        text = extract_text_with_gpt4_vision(file_bytes, file_type, file_name)
+
+        # Fall back to Groq Vision
+        text = extract_text_with_groq_vision(file_bytes, file_type, file_name)
         if text and text.strip():
             return text
-    
-    elif file_type in ["image/png", "image/jpeg"]:
-        # For images, try Azure first (if available), then GPT-4o Vision
+
+    # ------- Image -------
+    elif file_type in ["image/png", "image/jpeg", "image/jpg", "image/webp"]:
+        # For images, try Azure first (if available), then Groq Vision
         if AZURE_AVAILABLE and AZURE_ENDPOINT and AZURE_KEY:
             text = extract_text_from_pdf_with_azure(file_bytes)
             if text and text.strip():
                 return text
-        
-        text = extract_text_with_gpt4_vision(file_bytes, file_type, file_name)
+
+        text = extract_text_with_groq_vision(file_bytes, file_type, file_name)
         if text and text.strip():
             return text
-    
+
     logger.error(f"All text extraction methods failed for {file_name}")
     return None
 
 
-def parse_notice_with_gpt4(raw_text: str, max_retries: int = 1) -> Dict[str, Any]:
+# =========================================================================
+# STRUCTURED PARSING
+# =========================================================================
+
+def parse_notice_with_groq(raw_text: str, max_retries: int = 1) -> Dict[str, Any]:
     """
-    Send extracted text to GPT-4o for structured parsing and JSON extraction.
-    Includes retry logic for transient API errors or invalid JSON.
-    
+    Send extracted text to Groq (llama-3.3-70b-versatile) for structured
+    parsing and JSON extraction. Includes retry logic for transient API
+    errors or invalid JSON.
+
     Args:
         raw_text (str): Extracted raw text from notice.
         max_retries (int): Number of retry attempts for invalid JSON.
-    
+
     Returns:
         Dict[str, Any]: Parsed notice data with structure defined in FBR_SYSTEM_PROMPT.
     """
+    if not client:
+        return _get_fallback_response(
+            "Groq client not initialised. Check GROQ_API_KEY."
+        )
+
     retries = 0
-    
+
     while retries <= max_retries:
         try:
-            logger.info(f"Sending notice text to GPT-4o for parsing (attempt {retries + 1})...")
-            
-            message = client.messages.create(
-                model="gpt-4o",
+            logger.info(
+                f"Sending notice text to Groq for parsing (attempt {retries + 1})..."
+            )
+
+            response = client.chat.completions.create(
+                model=GROQ_TEXT_MODEL,
                 max_tokens=1500,
                 response_format={"type": "json_object"},
-                system=FBR_SYSTEM_PROMPT,
                 messages=[
                     {
+                        "role": "system",
+                        "content": FBR_SYSTEM_PROMPT,
+                    },
+                    {
                         "role": "user",
-                        "content": f"Parse this tax notice and extract information:\n\n{raw_text[:4000]}"  # Limit context
-                    }
-                ]
+                        "content": (
+                            "Parse this tax notice and extract information:\n\n"
+                            f"{raw_text[:4000]}"  # Limit context to stay within token budget
+                        ),
+                    },
+                ],
             )
-            
-            # Parse JSON response
-            response_text = message.content[0].text
+
+            response_text = response.choices[0].message.content
             result = json.loads(response_text)
-            
-            logger.info(f"GPT-4o parsing successful. Extracted: {result.get('section_cited', 'Unknown')}")
+
+            logger.info(
+                f"Groq parsing successful. Extracted: {result.get('section_cited', 'Unknown')}"
+            )
             return result
-        
+
         except json.JSONDecodeError as e:
-            logger.warning(f"Invalid JSON response from GPT-4o (attempt {retries + 1}): {str(e)}")
+            logger.warning(
+                f"Invalid JSON response from Groq (attempt {retries + 1}): {str(e)}"
+            )
             retries += 1
-            
             if retries > max_retries:
                 logger.error("Max retries exceeded. Returning fallback response.")
-                return _get_fallback_response("JSON parsing error from GPT-4o. Unable to extract structured data.")
-        
+                return _get_fallback_response(
+                    "JSON parsing error from Groq. Unable to extract structured data."
+                )
+
         except APIError as e:
-            logger.warning(f"OpenAI API error (attempt {retries + 1}): {str(e)}")
+            logger.warning(f"Groq API error (attempt {retries + 1}): {str(e)}")
             retries += 1
-            
             if retries > max_retries:
                 logger.error("Max retries exceeded. Returning fallback response.")
-                return _get_fallback_response(f"OpenAI API error: {str(e)}")
-        
+                return _get_fallback_response(f"Groq API error: {str(e)}")
+
         except Exception as e:
-            logger.error(f"Unexpected error during GPT-4o parsing: {str(e)}")
+            logger.error(f"Unexpected error during Groq parsing: {str(e)}")
             return _get_fallback_response(f"Unexpected error: {str(e)}")
-    
+
     return _get_fallback_response("Unknown error during parsing.")
 
+
+# =========================================================================
+# VALIDATION & FALLBACK
+# =========================================================================
 
 def _get_fallback_response(error_message: str) -> Dict[str, Any]:
     """
     Return a fallback response when parsing fails.
     Ensures the app doesn't crash with invalid data.
-    
+
     Args:
         error_message (str): User-facing error message.
-    
+
     Returns:
         Dict[str, Any]: Fallback response with error flag.
     """
@@ -376,7 +460,7 @@ def _get_fallback_response(error_message: str) -> Dict[str, Any]:
         "document_checklist": [],
         "risk_level": "unknown",
         "risk_reason": "Unable to assess",
-        "uncertainties": ["All fields: Unable to process document"]
+        "uncertainties": ["All fields: Unable to process document"],
     }
 
 
@@ -384,14 +468,13 @@ def validate_result(result: Dict[str, Any]) -> Dict[str, Any]:
     """
     Validate and clean the parsed result.
     Ensures all expected fields are present and properly formatted.
-    
+
     Args:
-        result (Dict[str, Any]): Parsed result from GPT-4o.
-    
+        result (Dict[str, Any]): Parsed result from Groq.
+
     Returns:
         Dict[str, Any]: Validated result with safe defaults.
     """
-    # Define expected structure with safe defaults
     expected_fields = {
         "section_cited": "Unknown",
         "tax_year": "Unknown",
@@ -400,46 +483,49 @@ def validate_result(result: Dict[str, Any]) -> Dict[str, Any]:
         "document_checklist": [],
         "risk_level": "unknown",
         "risk_reason": "Unable to assess",
-        "uncertainties": []
+        "uncertainties": [],
     }
-    
-    # Ensure all fields exist and are properly typed
+
     for key, default in expected_fields.items():
         if key not in result:
             result[key] = default
-        
-        # Validate types
+
+        # Validate list fields
         if key in ["allegations_summary", "document_checklist", "uncertainties"]:
             if not isinstance(result[key], list):
                 result[key] = default if isinstance(default, list) else [str(result[key])]
-    
+
     # Validate deadline format
     if result.get("deadline") and not isinstance(result["deadline"], str):
         result["deadline"] = None
-    
+
     # Validate risk level
     if result.get("risk_level") not in ["low", "medium", "high", "unknown"]:
         result["risk_level"] = "unknown"
-    
+
     logger.info("Result validation complete.")
     return result
 
 
+# =========================================================================
+# MAIN ENTRY POINT
+# =========================================================================
+
 def process_notice(uploaded_file) -> Dict[str, Any]:
     """
     Main orchestration function for processing a tax notice.
-    
+
     Pipeline:
     1. Extract raw text from file (PDF or image)
-    2. Send to GPT-4o for structured parsing
+    2. Send to Groq for structured parsing
     3. Validate and return result
-    
+
     Args:
         uploaded_file: Streamlit UploadedFile object.
-    
+
     Returns:
         Dict[str, Any]: Structured notice data or error response.
-    
+
     Example:
         result = process_notice(uploaded_file)
         if "error" not in result:
@@ -451,17 +537,19 @@ def process_notice(uploaded_file) -> Dict[str, Any]:
         raw_text = extract_raw_text(uploaded_file)
         if not raw_text:
             logger.error("Text extraction failed for all methods.")
-            return _get_fallback_response("The document could not be read. Please try a clearer scan or photo.")
-        
-        # Step 2: Parse with GPT-4o
-        result = parse_notice_with_gpt4(raw_text)
-        
+            return _get_fallback_response(
+                "The document could not be read. Please try a clearer scan or photo."
+            )
+
+        # Step 2: Parse with Groq
+        result = parse_notice_with_groq(raw_text)
+
         # Step 3: Validate
         result = validate_result(result)
-        
+
         logger.info("Notice processing complete.")
         return result
-    
+
     except Exception as e:
         logger.error(f"Unexpected error in process_notice: {str(e)}")
         return _get_fallback_response(f"Unexpected error: {str(e)}")
